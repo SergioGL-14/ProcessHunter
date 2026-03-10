@@ -1,5 +1,5 @@
 # ProcessHunter
-### El Cazador de Procesos Zombi
+### Cazador de Procesos Zombi
 
 Herramienta de diagnóstico de procesos para Windows, escrita íntegramente en PowerShell con interfaz gráfica WPF construida en código puro — sin XAML. Detecta, clasifica y permite actuar sobre procesos zombi, sospechosos, degradantes y frikis con una estética cyberpunk inspirada en terminales de ciencia ficción.
 
