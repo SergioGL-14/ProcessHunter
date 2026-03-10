@@ -124,14 +124,6 @@ El script no usa XAML ni ningún archivo externo. Toda la interfaz se construye 
 
 ---
 
-## Integraciones futuras previstas
-
-- **RCNG** — lanzar análisis desde la herramienta de control remoto existente
-- **XestAD** — cruzar el usuario propietario del proceso contra Active Directory para identificar quién lo lanzó
-- **Análisis remoto** — soporte para ejecutar el escaneo contra equipos remotos vía WMI o PsExec
-
----
-
 ## Estructura del proyecto
 
 ```
