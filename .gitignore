@@ -1,0 +1,4 @@
+ProcessHunter_Log.txt
+*.html
+*.tmp
+__pycache__/

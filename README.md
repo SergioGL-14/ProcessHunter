@@ -72,6 +72,8 @@ Todas las acciones operan sobre el proceso seleccionado en el DataGrid:
 - **Purgar todos los zombis** — muestra la lista completa de zombis detectados, pide confirmación y los elimina en lote. Reporta cuántos se pudieron finalizar y cuántos fallaron.
 - **Auto-refresco** — re-escanea automáticamente cada 30 segundos. Se activa y desactiva con el botón de la toolbar.
 
+Las acciones de finalizar y purgar son destructivas, terminan procesos con `Stop-Process -Force` y no se pueden deshacer. La aplicación siempre solicita confirmación antes de ejecutarlas.
+
 ---
 
 ## Clasificación manual

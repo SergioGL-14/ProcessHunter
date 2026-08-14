@@ -26,6 +26,7 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
+. (Join-Path $PSScriptRoot 'ProcessHunter.Export.ps1')
 
 # ══════════════════════════════════════════════════════════════
 # GLOBALES DE SCRIPT
@@ -1292,7 +1293,10 @@ function Do-Export {
 
     $ext = [System.IO.Path]::GetExtension($dlg.FileName).ToLower()
     switch ($ext) {
-        '.html' { Export-AsHTML $dlg.FileName }
+        '.html' {
+            Export-AsHTML -Path $dlg.FileName -Processes @($Script:AllProcs) -Categories $Script:CAT `
+                -Version $Script:Version -ComputerName $env:COMPUTERNAME -UserName $env:USERNAME
+        }
         '.csv'  { Export-AsCSV  $dlg.FileName }
         '.json' { Export-AsJSON $dlg.FileName }
         default { Export-AsTXT  $dlg.FileName }
@@ -1300,53 +1304,6 @@ function Do-Export {
     $Script:UI.StatusLabel.Text = "📤 Informe exportado: $($dlg.FileName)"
     Write-AuditLog "EXPORTAR INFORME ($ext)" $dlg.FileName
     Show-Msg "✅ Informe exportado correctamente:`n$($dlg.FileName)" 'Exportación exitosa'
-}
-
-function Export-AsHTML {
-    param([string]$path)
-    $rows = $Script:AllProcs | ForEach-Object {
-        $s = $Script:CAT[$_.Category]
-        $fgHex = '#{0:X2}{1:X2}{2:X2}' -f $s.Fg.R, $s.Fg.G, $s.Fg.B
-        "<tr style='color:$fgHex'>
-            <td>$($s.Icon) $($s.Label)</td><td>$($_.Name)</td><td>$($_.PID)</td>
-            <td>$($_.RAM)</td><td>$($_.CPU)</td><td>$($_.Owner)</td>
-            <td>$($_.StartTime)</td><td style='font-size:10px;word-break:break-all'>$($_.Path)</td>
-        </tr>"
-    }
-    $nZ = @($Script:AllProcs | Where-Object Category -eq 'ZOMBIE').Count
-    $nS = @($Script:AllProcs | Where-Object Category -eq 'SUSPICIOUS').Count
-    $nD = @($Script:AllProcs | Where-Object Category -eq 'DEGRADING').Count
-    $nF = @($Script:AllProcs | Where-Object Category -eq 'FRIKI').Count
-
-    @"
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>ProcessHunter – Informe $(Get-Date -Format 'yyyy-MM-dd')</title>
-<style>
-  *{box-sizing:border-box}
-  body{background:#050905;color:#00ff46;font-family:Consolas,monospace;margin:0;padding:20px}
-  h1{color:#00ff46;font-size:22px;border-bottom:2px solid #005020;padding-bottom:10px;margin-bottom:6px}
-  .meta{color:#558855;font-size:11px;margin-bottom:18px}
-  .badges{display:flex;gap:14px;margin:14px 0;flex-wrap:wrap}
-  .badge{background:#080e08;border:1px solid #005020;border-radius:5px;padding:8px 16px;text-align:center}
-  .badge .n{font-size:26px;font-weight:bold;line-height:1}
-  .badge .l{font-size:10px;color:#558855;margin-top:3px}
-  table{border-collapse:collapse;width:100%;font-size:11px;margin-top:14px}
-  th{background:#030f03;color:#00b432;border:1px solid #004015;padding:7px 9px;text-align:left;position:sticky;top:0}
-  td{border:1px solid #002810;padding:5px 8px;vertical-align:top}
-  tr:hover td{background:rgba(0,255,70,.06)}
-</style></head><body>
-<h1>🧟 ProcessHunter v$($Script:Version) – Informe de Diagnóstico</h1>
-<div class="meta">Generado: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') &nbsp;|&nbsp; Host: $env:COMPUTERNAME &nbsp;|&nbsp; Usuario: $env:USERNAME</div>
-<div class="badges">
-  <div class="badge"><div class="n" style="color:#00ff46">$nZ</div><div class="l">🧟 Zombis</div></div>
-  <div class="badge"><div class="n" style="color:#ffc800">$nS</div><div class="l">⚠️ Sospechosos</div></div>
-  <div class="badge"><div class="n" style="color:#ff9100">$nD</div><div class="l">🔋 Degradantes</div></div>
-  <div class="badge"><div class="n" style="color:#b932ff">$nF</div><div class="l">🤖 Frikis</div></div>
-  <div class="badge"><div class="n" style="color:#00e6e6">$($Script:AllProcs.Count)</div><div class="l">⚙️ Total</div></div>
-</div>
-<table><thead><tr><th>TIPO</th><th>NOMBRE</th><th>PID</th><th>RAM(MB)</th><th>CPU(s)</th><th>USUARIO</th><th>INICIO</th><th>RUTA</th></tr></thead>
-<tbody>$($rows -join '')</tbody></table></body></html>
-"@ | Out-File -FilePath $path -Encoding UTF8
 }
 
 function Export-AsTXT {
