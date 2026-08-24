@@ -1,17 +1,17 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    ProcessHunter v2.0 - Cazador de Procesos Zombi
+    ProcessHunter v2.0 - Zombie Process Hunter
 .DESCRIPTION
-    Herramienta de diagnóstico con GUI WPF (sin XAML) estilo cyberpunk/retro.
-    Detecta, clasifica y permite actuar sobre procesos zombi, sospechosos y degradantes.
+    Diagnostics tool with a retro/cyberpunk WPF GUI (no XAML).
+    Detects, classifies and lets you act on zombie, suspicious and resource-hungry processes.
 .NOTES
-    PowerShell 5.1+ | WPF puro en código | Sin XAML
+    PowerShell 5.1+ | Pure-code WPF | No XAML
     Ejecutar: powershell -STA -ExecutionPolicy Bypass -File ProcessHunter.ps1
 #>
 
 # ══════════════════════════════════════════════════════════════
-# STA THREAD CHECK (WPF require STA)
+# STA THREAD CHECK (WPF requires STA)
 # ══════════════════════════════════════════════════════════════
 if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
     $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
@@ -20,7 +20,7 @@ if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
 }
 
 # ══════════════════════════════════════════════════════════════
-# ENSAMBLADOS
+# ASSEMBLIES
 # ══════════════════════════════════════════════════════════════
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -29,7 +29,7 @@ Add-Type -AssemblyName System.Windows.Forms
 . (Join-Path $PSScriptRoot 'ProcessHunter.Export.ps1')
 
 # ══════════════════════════════════════════════════════════════
-# GLOBALES DE SCRIPT
+# SCRIPT GLOBALS
 # ══════════════════════════════════════════════════════════════
 $Script:Version      = "2.0.0"
 $Script:LogPath      = "$env:USERPROFILE\Documents\ProcessHunter_Log.txt"
@@ -43,7 +43,7 @@ $Script:UI           = @{}
 $Script:CurrentProc  = $null
 
 # ══════════════════════════════════════════════════════════════
-# PALETA DE COLORES
+# COLOR PALETTE
 # ══════════════════════════════════════════════════════════════
 $Script:CLR = @{
     BgMain    = [System.Windows.Media.Color]::FromRgb(5,  9,  5)
@@ -87,13 +87,13 @@ function New-Brush {
     return $b
 }
 
-# Pre-compilar pinceles
+# Pre-build brushes
 $Script:BR = @{}
 foreach ($k in $Script:CLR.Keys) { $Script:BR[$k] = New-Brush $Script:CLR[$k] }
 $Script:BR.Transparent = [System.Windows.Media.Brushes]::Transparent
 
 # ══════════════════════════════════════════════════════════════
-# CATEGORÍAS DE PROCESO
+# PROCESS CATEGORIES
 # ══════════════════════════════════════════════════════════════
 $Script:CAT = [ordered]@{
     ZOMBIE     = @{ Icon="🧟";  Label="Zombi";      Fg=$Script:CLR.Green;    Bg=[System.Windows.Media.Color]::FromRgb( 8, 28,  8) }
@@ -106,7 +106,7 @@ $Script:CAT = [ordered]@{
 }
 
 # ══════════════════════════════════════════════════════════════
-# LISTA BLANCA DE PROCESOS DE SISTEMA
+# SYSTEM PROCESS WHITELIST
 # ══════════════════════════════════════════════════════════════
 @(
     'System','Idle','svchost','lsass','winlogon','csrss','wininit',
@@ -121,7 +121,7 @@ $Script:CAT = [ordered]@{
 ) | ForEach-Object { $Script:CritNames.Add($_) | Out-Null }
 
 # ══════════════════════════════════════════════════════════════
-# MOTOR DE ANÁLISIS DE PROCESOS
+# PROCESS ANALYSIS ENGINE
 # ══════════════════════════════════════════════════════════════
 function Get-ProcessSignature {
     param([string]$path)
@@ -155,7 +155,7 @@ function Get-ProcessCategory {
     $pid_  = $proc.Id
     $name_ = $proc.Name
 
-    # Marcas manuales tienen prioridad
+    # Manual marks take priority
     if ($Script:SafePIDs.Contains($pid_))     { return 'SAFE' }
     if ($Script:SuspPIDs.Contains($pid_))     { return 'SUSPICIOUS' }
     if ($Script:CritNames.Contains($name_))   { return 'CRITICAL' }
@@ -164,15 +164,15 @@ function Get-ProcessCategory {
     $cpu  = try { $proc.CPU }                 catch { 0 }
     $path = try { $proc.MainModule.FileName } catch { '' }
 
-    # Degradante: alto consumo de recursos
+    # Degrading: high resource usage
     if ($ram -gt 500 -or $cpu -gt 60) { return 'DEGRADING' }
 
-    # Sospechoso: rutas temporales o sin firma en ruta inusual
+    # Suspicious: temp paths or unsigned binary in an unusual location
     if ($path -match '(?i)(\\[Tt]emp\\|\\[Tt]mp\\|AppData\\Local\\Temp|\\[Rr]ecycle|AppData\\Roaming\\[^\\]+\.exe)') {
         return 'SUSPICIOUS'
     }
 
-    # Friki: nombres de hacking, juegos, ejecutables en Escritorio/Descargas
+    # Friki: hacking keywords, executables on Desktop/Downloads
     if ($name_ -match '(?i)(hack|crack|keygen|patch|injector|cheat|trainer|bypass|warez|torrent)') {
         return 'FRIKI'
     }
@@ -180,7 +180,7 @@ function Get-ProcessCategory {
         return 'FRIKI'
     }
 
-    # Zombi: sin CPU, poca RAM, sin ventana, padre muerto o proceso huérfano
+    # Zombie: no CPU, low RAM, no window, dead parent or orphaned process
     if ($cpu -lt 0.5 -and $ram -lt 8 -and $proc.MainWindowHandle -eq [IntPtr]::Zero) {
         $ppid = if ($cimMap -and $cimMap[$pid_]) { $cimMap[$pid_].ParentProcessId } else { 0 }
         if ($ppid -gt 4) {
@@ -196,7 +196,7 @@ function Get-ProcessCategory {
 function Invoke-ProcessScan {
     $result = [System.Collections.Generic.List[PSObject]]::new()
 
-    # Datos CIM (para propietario y padre)
+    # CIM data (owner and parent)
     $cimMap = @{}
     try {
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
@@ -246,16 +246,16 @@ function Invoke-ProcessScan {
                 Handles     = $handles_
                 WindowTitle = $title_
             }) | Out-Null
-        } catch { <# Proceso inaccesible, ignorar #> }
+        } catch { <# Unreachable process, skip #> }
     }
 
-    # Ordenar: peligrosos primero
+    # Sort: dangerous first
     $order = @{ ZOMBIE=0; SUSPICIOUS=1; DEGRADING=2; FRIKI=3; NORMAL=4; SAFE=5; CRITICAL=6 }
     return $result | Sort-Object { $order[$_.Category] }, Name
 }
 
 # ══════════════════════════════════════════════════════════════
-# SISTEMA DE LOGGING
+# LOGGING SYSTEM
 # ══════════════════════════════════════════════════════════════
 function Write-AuditLog {
     param([string]$action, [string]$procName = '', [int]$procPid = 0)
@@ -281,7 +281,7 @@ function Write-AuditLog {
 }
 
 # ══════════════════════════════════════════════════════════════
-# FUNCIONES AYUDANTES DE WPF
+# WPF HELPER FUNCTIONS
 # ══════════════════════════════════════════════════════════════
 function New-T {   # Thickness
     param($u=0, $t=0, $r=0, $b=0)
@@ -364,11 +364,11 @@ function New-GridColDef {
 }
 
 # ══════════════════════════════════════════════════════════════
-# CONSTRUCCIÓN DE LA VENTANA PRINCIPAL
+# MAIN WINDOW CONSTRUCTION
 # ══════════════════════════════════════════════════════════════
 function Build-MainWindow {
 
-    # ── VENTANA ──────────────────────────────────────────────
+    # WINDOW ──────────────────────────────────────────────
     $win = [System.Windows.Window]::new()
     $win.Title  = "ProcessHunter v$($Script:Version)  –  El Cazador de Procesos Zombi"
     $win.Width  = 1600
@@ -379,7 +379,7 @@ function Build-MainWindow {
     $win.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
     $win.FontFamily  = [System.Windows.Media.FontFamily]::new('Consolas')
 
-    # ── GRID RAÍZ  (6 filas) ─────────────────────────────────
+    # ROOT GRID (6 rows) ─────────────────────────────────
     $root = [System.Windows.Controls.Grid]::new()
     $root.RowDefinitions.Add((New-GridRowDef 72))    # 0  Header/título
     $root.RowDefinitions.Add((New-GridRowDef 52))    # 1  Barra de herramientas
@@ -390,7 +390,7 @@ function Build-MainWindow {
     $win.Content = $root
 
     # ══════════════════════════════════════════════════════════
-    # FILA 0 – CABECERA
+    # ROW 0 - HEADER
     # ══════════════════════════════════════════════════════════
     $headerBorder = [System.Windows.Controls.Border]::new()
     $headerBorder.Background = New-Brush $Script:CLR.BgHeader
@@ -404,7 +404,7 @@ function Build-MainWindow {
     $hGrid.ColumnDefinitions.Add((New-GridColDef 220))
     $headerBorder.Child = $hGrid
 
-    # Izquierda: icono + título
+    # Left: icon + title
     $hLeft = [System.Windows.Controls.StackPanel]::new()
     $hLeft.Orientation = [System.Windows.Controls.Orientation]::Horizontal
     $hLeft.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
@@ -421,7 +421,7 @@ function Build-MainWindow {
     $hTitleStack.Children.Add((New-TextBlock 'PROCESSHUNTER' 26 $Script:BR.Green $true)) | Out-Null
     $hTitleStack.Children.Add((New-TextBlock "El Cazador de Procesos Zombi  ·  v$($Script:Version)" 11 $Script:BR.GreenMid)) | Out-Null
 
-    # Derecha: info usuario / último escaneo
+    # Right: user info / last scan
     $hRight = [System.Windows.Controls.StackPanel]::new()
     $hRight.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
     $hRight.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Right
@@ -435,7 +435,7 @@ function Build-MainWindow {
     $hRight.Children.Add($Script:UI.LastScanLabel) | Out-Null
 
     # ══════════════════════════════════════════════════════════
-    # FILA 1 – BARRA DE HERRAMIENTAS
+    # ROW 1 - TOOLBAR
     # ══════════════════════════════════════════════════════════
     $toolBorder = [System.Windows.Controls.Border]::new()
     $toolBorder.Background = New-Brush ([System.Windows.Media.Color]::FromRgb(7,14,7))
@@ -449,14 +449,14 @@ function Build-MainWindow {
     $toolSP.Orientation = [System.Windows.Controls.Orientation]::Horizontal
     $toolBorder.Child = $toolSP
 
-    # Botón ESCANEAR
+    # SCAN button
     $Script:UI.BtnScan = New-Button '🔄  ESCANEAR PROCESOS' -h 34 -onClick { Do-Scan }
     $Script:UI.BtnScan.Width = 230
     $toolSP.Children.Add($Script:UI.BtnScan) | Out-Null
 
     $toolSP.Children.Add((Add-ToolSep)) | Out-Null
 
-    # Botón PURGAR ZOMBIS
+    # PURGE ZOMBIES button
     $Script:UI.BtnPurge = New-Button '💀  PURGAR TODOS LOS ZOMBIS' `
         -bg (New-Brush $Script:CLR.RedDark) -fg (New-Brush $Script:CLR.Red) `
         -border (New-Brush $Script:CLR.Red) -h 34 -onClick { Do-PurgeZombies }
@@ -465,7 +465,7 @@ function Build-MainWindow {
 
     $toolSP.Children.Add((Add-ToolSep)) | Out-Null
 
-    # Botón EXPORTAR
+    # EXPORT button
     $Script:UI.BtnExport = New-Button '📤  EXPORTAR INFORME' `
         -bg (New-Brush $Script:CLR.CyanDark) -fg (New-Brush $Script:CLR.Cyan) `
         -border (New-Brush $Script:CLR.Cyan) -h 34 -onClick { Do-Export }
@@ -474,7 +474,7 @@ function Build-MainWindow {
 
     $toolSP.Children.Add((Add-ToolSep)) | Out-Null
 
-    # Botón AUTO-REFRESCO
+    # AUTO-REFRESH button
     $Script:UI.BtnAuto = New-Button '⏱️  AUTO: OFF' -h 34 -onClick { Do-ToggleAuto }
     $Script:UI.BtnAuto.Width = 160
     $Script:UI.BtnAuto.Foreground = $Script:BR.GrayGrn
@@ -482,14 +482,14 @@ function Build-MainWindow {
 
     $toolSP.Children.Add((Add-ToolSep)) | Out-Null
 
-    # Botón VER LOG
+    # VIEW LOG button
     $Script:UI.BtnOpenLog = New-Button '📋  VER LOG COMPLETO' `
         -bg (New-Brush $Script:CLR.GreenDark) -fg $Script:BR.GreenMid -h 34 `
         -onClick { Start-Process notepad.exe $Script:LogPath }
     $Script:UI.BtnOpenLog.Width = 200
     $toolSP.Children.Add($Script:UI.BtnOpenLog) | Out-Null
 
-    # Caja de búsqueda (derecha)
+    # Search box (right)
     $searchOuter = [System.Windows.Controls.Border]::new()
     $searchOuter.Background = $Script:BR.BgPanel
     $searchOuter.BorderBrush = $Script:BR.Border
@@ -521,7 +521,7 @@ function Build-MainWindow {
     $toolSP.Children.Add($searchOuter) | Out-Null
 
     # ══════════════════════════════════════════════════════════
-    # FILA 2 – BARRA DE FILTROS
+    # ROW 2 - FILTER BAR
     # ══════════════════════════════════════════════════════════
     $filterBorder = [System.Windows.Controls.Border]::new()
     $filterBorder.Background = New-Brush ([System.Windows.Media.Color]::FromRgb(5,12,5))
@@ -574,7 +574,7 @@ function Build-MainWindow {
         $filterSP.Children.Add($fb) | Out-Null
     }
 
-    # Contador de procesos por categoría (a la derecha)
+    # Per-category process counters (right side)
     $Script:UI.FilterCountsSP = [System.Windows.Controls.StackPanel]::new()
     $Script:UI.FilterCountsSP.Orientation = [System.Windows.Controls.Orientation]::Horizontal
     $Script:UI.FilterCountsSP.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Right
@@ -587,7 +587,7 @@ function Build-MainWindow {
     $filterFullGrid.Children.Add($Script:UI.FilterCountsSP) | Out-Null
 
     # ══════════════════════════════════════════════════════════
-    # FILA 3 – CONTENIDO PRINCIPAL (DataGrid | Panel detalles)
+    # ROW 3 - MAIN CONTENT (DataGrid | Details panel)
     # ══════════════════════════════════════════════════════════
     $mainGrid = [System.Windows.Controls.Grid]::new()
     $mainGrid.ColumnDefinitions.Add((New-GridColDef 1.65 ([System.Windows.GridUnitType]::Star)))
@@ -595,7 +595,7 @@ function Build-MainWindow {
     [System.Windows.Controls.Grid]::SetRow($mainGrid, 3)
     $root.Children.Add($mainGrid) | Out-Null
 
-    # ── COLUMNA IZQUIERDA: DataGrid ───────────────────────────
+    # LEFT COLUMN: DataGrid ───────────────────────────
     $leftBorder = [System.Windows.Controls.Border]::new()
     $leftBorder.BorderBrush = $Script:BR.BorderDim
     $leftBorder.BorderThickness = New-T 0 0 1 0
@@ -624,7 +624,7 @@ function Build-MainWindow {
     $dg.RowHeight = 28
     $dg.Margin = New-T 0
 
-    # Estilo de cabecera de columna
+    # Column header style
     $colHdrStyle  = [System.Windows.Style]::new([System.Windows.Controls.Primitives.DataGridColumnHeader])
     $hdrBgBrush   = New-Brush ([System.Windows.Media.Color]::FromRgb(3,13,3))
     $hdrFont      = [System.Windows.Media.FontFamily]::new('Consolas')
@@ -648,7 +648,7 @@ function Build-MainWindow {
     $colHdrStyle.Setters.Add($s7)
     $dg.ColumnHeaderStyle = $colHdrStyle
 
-    # Estilo de fila con color por categoría (DataTriggers)
+    # Row style colored by category (DataTriggers)
     $rowStyle = [System.Windows.Style]::new([System.Windows.Controls.DataGridRow])
     $rsCursor = [System.Windows.Setter]::new()
     $rsCursor.Property = [System.Windows.Controls.Control]::CursorProperty
@@ -674,7 +674,7 @@ function Build-MainWindow {
     }
     $dg.RowStyle = $rowStyle
 
-    # Estilo de celda
+    # Cell style
     $cellStyle = [System.Windows.Style]::new([System.Windows.Controls.DataGridCell])
     $cs1 = [System.Windows.Setter]::new()
     $cs1.Property = [System.Windows.Controls.Control]::BorderThicknessProperty
@@ -690,7 +690,7 @@ function Build-MainWindow {
     $cellStyle.Setters.Add($cs3)
     $dg.CellStyle = $cellStyle
 
-    # Definición de columnas
+    # Column definitions
     $colDefs = @(
         @{ H='TIPO';      B='Label';     W=90  }
         @{ H='PROCESO';   B='Name';      W=160 }
@@ -715,7 +715,7 @@ function Build-MainWindow {
 
     $leftBorder.Child = $dg
 
-    # ── COLUMNA DERECHA: PANEL DE DETALLES ───────────────────
+    # RIGHT COLUMN: DETAILS PANEL ───────────────────
     $rightBorder = [System.Windows.Controls.Border]::new()
     $rightBorder.Background = $Script:BR.BgPanel
     [System.Windows.Controls.Grid]::SetColumn($rightBorder, 1)
@@ -730,12 +730,12 @@ function Build-MainWindow {
     $detailSP.Margin = New-T 14 10 14 10
     $detailScroll.Content = $detailSP
 
-    # Título del panel
+    # Panel title
     $detailTitle = New-TextBlock '[ DETALLES DEL PROCESO ]' 14 $Script:BR.Green $true
     $detailTitle.Margin = New-T 0 0 0 8
     $detailSP.Children.Add($detailTitle) | Out-Null
 
-    # Badge de categoría
+    # Category badge
     $Script:UI.CatBadge = [System.Windows.Controls.Border]::new()
     $Script:UI.CatBadge.CornerRadius = [System.Windows.CornerRadius]::new(4)
     $Script:UI.CatBadge.Padding = New-T 10 5 10 5
@@ -746,7 +746,7 @@ function Build-MainWindow {
     $Script:UI.CatBadge.Child = $Script:UI.CatBadgeText
     $detailSP.Children.Add($Script:UI.CatBadge) | Out-Null
 
-    # Campos de detalle
+    # Detail fields
     $Script:UI.DetailFields = @{}
     $fieldDefs = @(
         @{ Label='Nombre';        Key='Nombre' }
@@ -786,7 +786,7 @@ function Build-MainWindow {
 
     $detailSP.Children.Add((New-Separator)) | Out-Null
 
-    # ── BOTONES DE ACCIÓN ────────────────────────────────────
+    # ACTION BUTTONS ────────────────────────────────────
     $actHdr = New-TextBlock '[ ACCIONES RÁPIDAS ]' 11 $Script:BR.GreenDim $true
     $actHdr.Margin = New-T 0 4 0 6
     $detailSP.Children.Add($actHdr) | Out-Null
@@ -812,7 +812,7 @@ function Build-MainWindow {
 
     $detailSP.Children.Add((New-Separator)) | Out-Null
 
-    # ── BOTONES DE MARCADO ───────────────────────────────────
+    # MARKING BUTTONS ───────────────────────────────────
     $markHdr = New-TextBlock '[ CLASIFICAR MANUALMENTE ]' 11 $Script:BR.GreenDim $true
     $markHdr.Margin = New-T 0 4 0 6
     $detailSP.Children.Add($markHdr) | Out-Null
@@ -839,7 +839,7 @@ function Build-MainWindow {
     $detailSP.Children.Add($Script:UI.BtnUnmark) | Out-Null
 
     # ══════════════════════════════════════════════════════════
-    # FILA 4 – BITÁCORA / LOG
+    # ROW 4 - AUDIT LOG
     # ══════════════════════════════════════════════════════════
     $logOuter = [System.Windows.Controls.Border]::new()
     $logOuter.Background = New-Brush $Script:CLR.BgLog
@@ -881,7 +881,7 @@ function Build-MainWindow {
     $logScroll.Content = $Script:UI.LogBox
 
     # ══════════════════════════════════════════════════════════
-    # FILA 5 – BARRA DE ESTADO
+    # ROW 5 - STATUS BAR
     # ══════════════════════════════════════════════════════════
     $statusBorder = [System.Windows.Controls.Border]::new()
     $statusBorder.Background = New-Brush ([System.Windows.Media.Color]::FromRgb(3,12,3))
@@ -906,18 +906,18 @@ function Build-MainWindow {
     $statusGrid.Children.Add($Script:UI.ClockLabel) | Out-Null
 
     # ── TIMERS ────────────────────────────────────────────────
-    # Reloj
+    # Clock
     $Script:TimerClock = [System.Windows.Threading.DispatcherTimer]::new()
     $Script:TimerClock.Interval = [TimeSpan]::FromSeconds(1)
     $Script:TimerClock.add_Tick({ $Script:UI.ClockLabel.Text = Get-Date -Format 'HH:mm:ss  yyyy-MM-dd' })
     $Script:TimerClock.Start()
 
-    # Auto-refresco
+    # Auto-refresh
     $Script:TimerAuto = [System.Windows.Threading.DispatcherTimer]::new()
     $Script:TimerAuto.Interval = [TimeSpan]::FromSeconds(30)
     $Script:TimerAuto.add_Tick({ Do-Scan })
 
-    # ── CIERRE ────────────────────────────────────────────────
+    # SHUTDOWN ────────────────────────────────────────────────
     $win.add_Closing({
         $Script:TimerClock.Stop()
         $Script:TimerAuto.Stop()
@@ -929,7 +929,7 @@ function Build-MainWindow {
 }
 
 # ══════════════════════════════════════════════════════════════
-# HELPER: Separador visual de toolbar
+# HELPER: Toolbar visual separator
 # ══════════════════════════════════════════════════════════════
 function Add-ToolSep {
     $s = [System.Windows.Controls.Separator]::new()
@@ -942,7 +942,7 @@ function Add-ToolSep {
 }
 
 # ══════════════════════════════════════════════════════════════
-# LÓGICA DE ACCIONES
+# ACTION LOGIC
 # ══════════════════════════════════════════════════════════════
 function Do-Scan {
     $Script:UI.StatusLabel.Text = '⏳ Escaneando procesos del sistema...'
@@ -992,7 +992,7 @@ function Do-ApplyFilter {
     $Script:UI.DataGrid.Items.Clear()
     foreach ($p in $filtered) { $Script:UI.DataGrid.Items.Add($p) | Out-Null }
 
-    # Resaltar filtro activo
+    # Highlight active filter
     foreach ($k in $Script:UI.FilterBtns.Keys) {
         $Script:UI.FilterBtns[$k].Opacity = if ($k -eq $Script:FilterCat) { 1.0 } else { 0.55 }
     }
@@ -1037,7 +1037,7 @@ function Do-UpdateDetails {
     $Script:UI.CatBadge.Background   = New-Brush $style.Bg
     $Script:UI.CatBadgeText.Foreground = New-Brush $style.Fg
 
-    # Firma (carga en background)
+    # Signature (loads in background)
     $pathCopy = $proc.Path
     $win = $Script:UI.Window
     $win.Dispatcher.InvokeAsync([Action]{
@@ -1052,7 +1052,7 @@ function Do-UpdateDetails {
         $Script:UI.DetailFields['Padre'].Text = $parentStr
     }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
 
-    # Campos estáticos
+    # Static fields
     $Script:UI.DetailFields['Nombre'].Text     = $proc.Name
     $Script:UI.DetailFields['PID'].Text        = "$($proc.PID)"
     $Script:UI.DetailFields['Clasificación'].Text = "$($style.Icon) $($style.Label)"
@@ -1067,7 +1067,7 @@ function Do-UpdateDetails {
     $Script:UI.DetailFields['Handles'].Text    = "$($proc.Handles)"
     $Script:UI.DetailFields['Título'].Text     = if ($proc.WindowTitle) { $proc.WindowTitle } else { '(sin ventana)' }
 
-    # Colores dinámicos según valores
+    # Dynamic colors based on values
     $ramClr = if ($proc.RAM -gt 500) { $Script:CLR.Red } elseif ($proc.RAM -gt 200) { $Script:CLR.Orange } else { $Script:CLR.White }
     $Script:UI.DetailFields['RAM'].Foreground = New-Brush $ramClr
 }
@@ -1133,17 +1133,17 @@ function Do-ViewTree {
     $txt += "Tipo:    $($Script:CAT[$proc.Category].Icon) $($proc.Label)`n"
     $txt += "═" * 55 + "`n`n"
 
-    # Padre
+    # Parent
     $parentStr = Get-ParentProcessName $proc.ParentPID
     $txt += "┌─ PADRE`n│  └─ $parentStr`n│`n"
 
-    # Proceso actual
+    # Current process
     $txt += "├─ PROCESO ACTUAL`n"
     $txt += "│  └─ $($proc.Name) (PID:$($proc.PID))  [$($proc.Label)]`n"
     $txt += "│     RAM: $($proc.RAM) MB  |  CPU: $($proc.CPU) s  |  Hilos: $($proc.Threads)`n"
     $txt += "│     Ruta: $($proc.Path)`n│`n"
 
-    # Hijos
+    # Children
     $children = @($Script:AllProcs | Where-Object { $_.ParentPID -eq $proc.PID })
     $txt += "└─ PROCESOS HIJO ($($children.Count))`n"
     if ($children.Count -gt 0) {
@@ -1154,7 +1154,7 @@ function Do-ViewTree {
         $txt += "   (ninguno)`n"
     }
 
-    # Ventana secundaria
+    # Secondary window
     $tWin = [System.Windows.Window]::new()
     $tWin.Title = "ProcessHunter – Árbol: $($proc.Name)"
     $tWin.Width = 570
@@ -1352,7 +1352,7 @@ function Show-Msg {
 }
 
 # ══════════════════════════════════════════════════════════════
-# PUNTO DE ENTRADA PRINCIPAL
+# MAIN ENTRY POINT
 # ══════════════════════════════════════════════════════════════
 Write-AuditLog "PROCESSHUNTER INICIADO  v$($Script:Version)"
 

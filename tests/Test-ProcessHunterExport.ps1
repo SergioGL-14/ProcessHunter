@@ -3,10 +3,10 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\ProcessHunter.Export.ps1')
 
 if ((ConvertTo-HtmlText '<name & "path">') -ne '&lt;name &amp; &quot;path&quot;&gt;') {
-    throw 'El escape HTML no codifica caracteres reservados.'
+    throw 'HTML escaping does not encode reserved characters.'
 }
 if ((ConvertTo-HtmlText $null) -ne '') {
-    throw 'El escape HTML no trata null como texto vacío.'
+    throw 'HTML escaping does not treat null as empty text.'
 }
 
 $categories = @{
@@ -22,7 +22,7 @@ try {
         -ComputerName 'host<&' -UserName 'user<&'
     $html = Get-Content -LiteralPath $output -Raw
     foreach ($unsafe in @('<script>', 'x</td>', 'user&admin', 'C:\<unsafe>\app.exe')) {
-        if ($html.Contains($unsafe)) { throw "Texto sin escapar en HTML: $unsafe" }
+        if ($html.Contains($unsafe)) { throw "Unescaped text in HTML: $unsafe" }
     }
     foreach ($safe in @('&lt;script&gt;', 'user&amp;admin', 'C:\&lt;unsafe&gt;\app.exe', 'host&lt;&amp;')) {
         if (-not $html.Contains($safe)) { throw "Falta texto escapado en HTML: $safe" }
@@ -31,4 +31,4 @@ try {
     Remove-Item -LiteralPath $output -Force -ErrorAction SilentlyContinue
 }
 
-Write-Output 'PASS: escape y exportación HTML'
+Write-Output 'PASS: HTML escaping and export'
