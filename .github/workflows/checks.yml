@@ -1,0 +1,16 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  export-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run export tests
+        shell: pwsh
+        run: ./tests/Test-ProcessHunterExport.ps1
