@@ -16,7 +16,7 @@ $process = [pscustomobject]@{
     Category = 'NORMAL'; Name = 'x</td><script>alert(1)</script>'; PID = 7; RAM = 1
     CPU = 0; Owner = 'user&admin'; StartTime = 'now'; Path = 'C:\<unsafe>\app.exe'
 }
-$output = Join-Path $env:TEMP 'ProcessHunter-export-test.html'
+$output = Join-Path ([System.IO.Path]::GetTempPath()) 'ProcessHunter-export-test.html'
 try {
     Export-AsHTML -Path $output -Processes @($process) -Categories $categories -Version 'test' `
         -ComputerName 'host<&' -UserName 'user<&'
